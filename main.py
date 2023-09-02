@@ -3,6 +3,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from tonsdk.contract.wallet import WalletVersionEnum
 
 from config import config
 from database.dao.holder import DAO
@@ -11,13 +12,20 @@ from utils.listener import TonListener
 from utils.ton_api import TonApi
 
 
-async def on_transaction(transaction, db: DAO):
+async def on_transaction(transaction, db: DAO, ton: TonApi):
     wallets = await db.wallet.get_all()
 
     account = transaction["account"]
 
-    if account in [wal.wallet for wal in wallets]:
-        print(account)
+    _wallet = next((wal for wal in wallets if wal.wallet == account), None)
+
+    if _wallet is not None:
+        balance = transaction["in_msg"]["value"]
+        balance = int(balance * 0.99)
+        wallet = await ton.get_wallet_by_keys(_wallet.public_key, _wallet.private_key, WalletVersionEnum.v3r2,
+                                              workchain=0)
+
+        await ton.send_tons(wallet, config.MAIN_ADDRESS, balance)
 
 
 async def main():
@@ -26,9 +34,9 @@ async def main():
         await conn.run_sync(Base.metadata.create_all)
 
     async_sessionmaker = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-
-    ton = TonApi("https://toncenter.com",
-                 "6cda0934e83bf49807ae65817dab80318ba494aa734fbcc923d607d930a2db61")
+    #
+    ton = TonApi(config.TON_URL,
+                 config.API_TON_KEY)
 
     listener = TonListener(on_transaction, ton, async_sessionmaker())
 

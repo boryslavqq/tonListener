@@ -3,7 +3,8 @@ from base64 import b64encode
 
 import aiohttp
 from tonsdk.contract.wallet import WalletVersionEnum, WalletV2ContractR1, WalletV2ContractR2, WalletV3ContractR1, \
-    WalletV3ContractR2, WalletV4ContractR1, WalletV4ContractR2, HighloadWalletV2Contract, WalletContract
+    WalletV3ContractR2, WalletV4ContractR1, WalletV4ContractR2, HighloadWalletV2Contract, WalletContract, Wallets
+from tonsdk.crypto import mnemonic_new
 
 
 class TonApi:
@@ -55,23 +56,28 @@ class TonApi:
         if "X-API-KEY" not in self.headers:
             raise Exception("You must authentificate first")
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(3)
 
         async with aiohttp.ClientSession() as session:
             async with session.request(method, self.host_url + api_method, json=body) as resp:
-                return await resp.json()
+                try:
+                    return await resp.json()
+                except Exception as err:
+                    print(f"Error occurred while trying to send {method} to {self.host_url + api_method} {await resp.text()}")
 
-    async def get_wallet_by_keys(self, pub_key: str, priv_key: str, version: WalletVersionEnum, workchain: int = 0,
-                                 **kwargs) -> WalletContract:
+    async def get_wallet_by_mnemonics(self, version: WalletVersionEnum, workchain: int = 0, mnemonics=None,
+                                      **kwargs):
 
         """
-        Get wallet using pub_key and private key
+        Get wallet using mnemonics
         """
 
-        wallet = self.ALL[version](
-            public_key=pub_key, private_key=priv_key, wc=workchain, **kwargs)
+        if not mnemonics:
+            mnemonics = mnemonic_new()
 
-        return wallet
+        mnemonics, public_key, private_key, wallet = Wallets.from_mnemonics(mnemonics, version=version,
+                                                                            workchain=workchain)
+        return mnemonics, public_key, private_key, wallet
 
     async def get_wallet_info(self, addr: str):
         return await self._do_request(

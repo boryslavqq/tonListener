@@ -25,6 +25,8 @@ class TonListener:
             elif last_masterchain_block_number > last_proceed_masterBlock:
                 last_proceed_masterBlock += 1
 
+            wallets = await DAO(self.session).wallet.get_all()
+
             for transaction in await self.ton.get_transactions_by_seqno(str(last_proceed_masterBlock)):
-                asyncio.create_task(self.on_transaction(transaction, DAO(self.session), self.ton, ))
+                asyncio.create_task(self.on_transaction(transaction, wallets, self.ton))
             await asyncio.sleep(2)

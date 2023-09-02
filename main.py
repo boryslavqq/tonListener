@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -8,24 +9,32 @@ from tonsdk.contract.wallet import WalletVersionEnum
 from config import config
 from database.dao.holder import DAO
 from database.models.base import Base
+from database.models.wallet import Wallet
 from utils.listener import TonListener
 from utils.ton_api import TonApi
 
 
-async def on_transaction(transaction, db: DAO, ton: TonApi):
-    wallets = await db.wallet.get_all()
-
-    account = transaction["account"]
+async def on_transaction(transaction, wallets: List[Wallet], ton: TonApi):
+    try:
+        account = transaction["in_msg"]["destination"]
+    except (TypeError, KeyError):
+        return
 
     _wallet = next((wal for wal in wallets if wal.wallet == account), None)
 
     if _wallet is not None:
+        print(f"HERE IS THE TRANSACTION to {account} from {transaction['in_msg']['source']}")
+
         balance = transaction["in_msg"]["value"]
         balance = int(balance * 0.99)
-        wallet = await ton.get_wallet_by_keys(_wallet.public_key, _wallet.private_key, WalletVersionEnum.v3r2,
-                                              workchain=0)
+        mnemonics, pub_k, priv_k, wallet = await ton.get_wallet_by_mnemonics(WalletVersionEnum.v3r2,
+                                                                             workchain=0, mnemonics=_wallet.mnemonics)
 
-        await ton.send_tons(wallet, config.MAIN_ADDRESS, balance)
+        message = await ton.send_tons(wallet, config.MAIN_ADDRESS, balance)
+        if message["ok"]:
+            print("TRANSACTION WAS SUCCESSFULLY SENT TO THE MAIN WALLET")
+            return
+        print(f"error occured while trying send_tons - {message}")
 
 
 async def main():
@@ -35,19 +44,21 @@ async def main():
 
     async_sessionmaker = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     #
-    ton = TonApi(config.TON_URL,
-                 config.API_TON_KEY)
 
-    listener = TonListener(on_transaction, ton, async_sessionmaker())
+    async with async_sessionmaker() as session:
+        ton = TonApi(config.TON_URL,
+                     config.API_TON_KEY)
 
-    try:
-        await listener.start()
-    finally:
-        async_sessionmaker.close_all()
+        listener = TonListener(on_transaction, ton, session)
+
+        try:
+            await listener.start()
+        finally:
+            await engine.dispose()
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
+    except (KeyboardInterrupt, SystemExit, RuntimeError):
         logging.error("Program stopped")

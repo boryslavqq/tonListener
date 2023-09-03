@@ -20,16 +20,14 @@ class TonListener:
             last_block = await self.ton.get_last_block()
             last_masterchain_block_number = last_block["result"]["last"]["seqno"]
 
-            if last_proceed_masterBlock == 0:
-                last_proceed_masterBlock = last_masterchain_block_number
-
-            elif last_proceed_masterBlock == last_masterchain_block_number:
+            if last_proceed_masterBlock == last_masterchain_block_number:
                 await asyncio.sleep(1)
                 continue
             elif last_masterchain_block_number - last_proceed_masterBlock > 1:
                 # TODO: check the blocks in between using check_block() method
                 pass
             else:
+                last_proceed_masterBlock = last_masterchain_block_number
                 await self.check_block(last_masterchain_block_number)
 
     async def check_block(self, block_seqno):

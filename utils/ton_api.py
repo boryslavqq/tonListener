@@ -63,7 +63,8 @@ class TonApi:
                 try:
                     return await resp.json()
                 except Exception as err:
-                    print(f"Error occurred while trying to send {method} to {self.host_url + api_method} {await resp.text()}")
+                    print(
+                        f"Error occurred while trying to send {method} to {self.host_url + api_method} {await resp.text()}")
 
     async def get_wallet_by_mnemonics(self, version: WalletVersionEnum, workchain: int = 0, mnemonics=None,
                                       **kwargs):

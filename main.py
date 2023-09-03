@@ -14,13 +14,10 @@ from utils.listener import TonListener
 from utils.ton_api import TonApi
 
 
-async def on_transaction(transaction, wallets: List[Wallet], ton: TonApi):
-    try:
-        account = transaction["in_msg"]["destination"]
-    except (TypeError, KeyError):
-        return
+async def on_transaction(transaction, ton: TonApi, dao: DAO):
+    account = transaction["in_msg"]["destination"]
 
-    _wallet = next((wal for wal in wallets if wal.wallet == account), None)
+    _wallet = await dao.wallet.get_by_wallet(account)
 
     if _wallet is not None:
         print(f"HERE IS THE TRANSACTION to {account} from {transaction['in_msg']['source']}")

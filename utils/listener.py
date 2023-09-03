@@ -21,14 +21,16 @@ class TonListener:
             last_masterchain_block_number = last_block["result"]["last"]["seqno"]
 
             if last_proceed_masterBlock == last_masterchain_block_number:
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
                 continue
-            elif last_masterchain_block_number - last_proceed_masterBlock > 1:
-                # TODO: check the blocks in between using check_block() method
-                pass
-            else:
+
+            if last_proceed_masterBlock == 0:
                 last_proceed_masterBlock = last_masterchain_block_number
-                await self.check_block(last_masterchain_block_number)
+            elif last_masterchain_block_number > last_proceed_masterBlock:
+                last_proceed_masterBlock += 1
+
+            await self.check_block(last_proceed_masterBlock)
+            await asyncio.sleep(2)
 
     async def check_block(self, block_seqno):
 
@@ -37,9 +39,10 @@ class TonListener:
         transactions = await self.ton.get_transactions_by_seqno(str(block_seqno))
 
         # TODO: wrap transaction['in_msg']['destination'] into same format as wallet.wallet
-
-        valid_transactions = [transaction for transaction in transactions if transaction['in_msg']['destination'] in wallets]
+        valid_transactions = [transaction for transaction in transactions if
+                              transaction.get('in_msg') is not None and transaction['in_msg'].get(
+                                  'destination') in wallets]
 
         if valid_transactions:
-            # TODO: call callback passing valid transactions
-            pass
+            for trans in valid_transactions:
+                await self.on_transaction(trans, self.ton, DAO(self.session))

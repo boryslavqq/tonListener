@@ -14,12 +14,35 @@ class TonListener:
 
     async def start(self):
 
+        last_proceed_masterBlock = 0
+
         while True:
             last_block = await self.ton.get_last_block()
-            print(last_block)
-            seqno = last_block["result"]["last"]["seqno"]
+            last_masterchain_block_number = last_block["result"]["last"]["seqno"]
 
-            for transaction in await self.ton.get_transactions_by_seqno(str(seqno)):
-                asyncio.create_task(self.on_transaction(transaction, DAO(self.session)))
+            if last_proceed_masterBlock == last_masterchain_block_number:
+                await asyncio.sleep(2)
+                continue
 
+            if last_proceed_masterBlock == 0:
+                last_proceed_masterBlock = last_masterchain_block_number
+            elif last_masterchain_block_number > last_proceed_masterBlock:
+                last_proceed_masterBlock += 1
+
+            await self.check_block(last_proceed_masterBlock)
             await asyncio.sleep(2)
+
+    async def check_block(self, block_seqno):
+
+        wallets = [wallet.wallet for wallet in await DAO(self.session).wallet.get_all()]
+
+        transactions = await self.ton.get_transactions_by_seqno(str(block_seqno))
+
+        # TODO: wrap transaction['in_msg']['destination'] into same format as wallet.wallet
+        valid_transactions = [transaction for transaction in transactions if
+                              transaction.get('in_msg') is not None and transaction['in_msg'].get(
+                                  'destination') in wallets]
+
+        if valid_transactions:
+            for trans in valid_transactions:
+                await self.on_transaction(trans, self.ton, DAO(self.session))
